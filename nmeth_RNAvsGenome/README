@@ -1,0 +1,41 @@
+README for scripts pertaining to Nature Methods paper: Accurate identification of human Alu and non-Alu RNA editing sites
+
+More detailed explanations (with specific links) can be found in the methods section of the paper
+
+All software packages used are publically available. The scripts are written in perl. You will need to tinker with them to make it work on your data!
+
+This is assuming that your RNA sequencing data is 76 bp, paired-end, stranded RNA-seq library, sanger quality format
+
+Getting Ready:
+Step 1. download necessary files from UCSC browser: hg19 genome (make sure to get ALL the chromosomes), Refseq, UCSC, Gencode, Ensembl gene annotation files, hg19 repeat masker, dbSNP135 (remove SNPs of "cDNA" molecular type)
+Step 2. download variant calls from 1000 genomes project and UW exome sequencing project
+Step 3. download required software: samtools, bedtools, command line blat, perl, bwa
+Step 4. make BED file with homozygous positions in genomic DNA
+
+Mapping reads:
+Step 1. concatenate splice junction sequence file (hg19_junctionseqs_75bp.fa) with hg19 genome
+Step 2. Create bwa index for this concatenated file
+Step 3. Map reads with bwa as single end sequences to this reference file (map the read1.fastq and read2.fastq separately)
+Step 4. use samtools rmdup to remove duplicate reads
+Step 5. convert the position of reads that map across splicing junctions onto the genome: java -Xmx2g convertCoordinates < in.sam > out.sam
+Step 6. filter out unmapped reads and reads with mapping quality < 20 with samtools
+Step 7. Merge the read1 and read2 alignments together (MERGED.bam) and index this file with samtools
+Step 8. Make pileup file from the merged alignment file using samtools
+Step 9. gzip the pileup file
+
+Call/filter Variants:
+Step 1. Initial variant calling: perl VariantCaller.pl in.pileup.gz > Candidates.txt
+Step 2. Use bedtools to filter out candidates that are not in a homozygous DNA position
+Step 3. Use bedtools to filter out candidates that overlap with dbSNP/1000 genomes/UW exome calls
+Step 4. Remove mismatches in first 6 bp of reads: perl Remove_mismatch_first6bp.pl in.Candidates.txt MERGED.bam out.Candidates.txt
+Step 5. Use bedtools to separate candidates in Alu and non-Alu regions of the genome
+
+Further filtering of non-Alu candidates:
+Step 1. Use bedtools to filter candidates that are in simple repeats
+Step 2. Filter intronic candidates that are within 4 bp of splicing junctions: perl Filter_intron_near_splicejuncts.pl in.Candidates.txt GeneAnnotationFile > out.Candidates.txt
+Step 3. Filter candidates in homopolyer runs: perl RemoveHomoNucleotides.pl in.Candidates.txt out.Candidates.txt
+Step 4. Use BLAT to ensure unique mapping: perl BLAT_candidates.pl in.Candidates.txt MERGED.bam out.Candidates.txt
+Step 5. Use bedtools to separate out candidates in repetitive non-Alu and nonrepetitive regions of the genome
+
+Determine mismatch type:
+Step 1. Use stranded RNA-seq info to determine which strand each variant comes from: perl Check_strand.pl in.Candidates.txt READ1.bam READ2.bam out.Candidates.txt
